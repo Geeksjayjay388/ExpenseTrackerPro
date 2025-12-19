@@ -158,7 +158,14 @@ const ExpenseTracker = () => {
     .reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
   
   const balance = totalIncome - totalExpenses;
+  const totalSavingsDeposits = expenses
+  .filter(e => e.category === 'Savings' && e.type === 'expense')
+  .reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+
+// Calculate remaining balance: income - (expenses + savings deposits)
+  const remainingBalance = totalIncome - (totalExpenses + totalSavingsDeposits);
   const netWorth = balance + savings.current;
+  
   
   // Category totals
   const categoryTotals = expenses.reduce((acc, expense) => {
@@ -937,7 +944,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
         
         {/* Stats Overview */}
         {expenses.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
             {/* Income Card */}
             <div className={`rounded-2xl p-6 shadow-sm transition-colors duration-300 ${
               theme === 'dark'
@@ -1055,6 +1062,66 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                 </div>
               </div>
             </div>
+            {/* Add this card after the Net Worth card in your stats overview grid */}
+<div className={`rounded-2xl p-6 shadow-sm transition-colors duration-300 ${
+  theme === 'dark'
+    ? remainingBalance >= 0
+      ? 'bg-gradient-to-r from-emerald-900/30 to-teal-900/30 border border-emerald-800'
+      : 'bg-gradient-to-r from-orange-900/30 to-amber-900/30 border border-orange-800'
+    : remainingBalance >= 0
+    ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100'
+    : 'bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-100'
+}`}>
+  <div className="flex items-center justify-between">
+    <div>
+      <p className={`text-sm font-medium mb-1 ${
+        theme === 'dark' 
+          ? remainingBalance >= 0 ? 'text-emerald-300' : 'text-orange-300'
+          : remainingBalance >= 0 ? 'text-emerald-800' : 'text-orange-800'
+      }`}>
+        Remaining Balance
+      </p>
+      <p className={`text-2xl font-bold ${
+        remainingBalance >= 0
+          ? theme === 'dark' ? 'text-emerald-100' : 'text-emerald-900'
+          : theme === 'dark' ? 'text-orange-100' : 'text-orange-900'
+      }`}>
+        {formatCurrency(remainingBalance)}
+      </p>
+      <div className="text-xs mt-2 space-y-1">
+        <div className="flex justify-between">
+          <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+            After Savings:
+          </span>
+          <span>{formatCurrency(totalSavingsDeposits)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+            Available:
+          </span>
+          <span className={`font-medium ${
+            remainingBalance >= 0 
+              ? 'text-green-600 dark:text-green-400' 
+              : 'text-red-600 dark:text-red-400'
+          }`}>
+            {remainingBalance >= 0 ? 'Positive' : 'Negative'}
+          </span>
+        </div>
+      </div>
+    </div>
+    <div className={`p-3 rounded-xl ${
+      remainingBalance >= 0
+        ? theme === 'dark' ? 'bg-emerald-900/50' : 'bg-emerald-100'
+        : theme === 'dark' ? 'bg-orange-900/50' : 'bg-orange-100'
+    }`}>
+      {remainingBalance >= 0 ? (
+        <CheckCircle className={remainingBalance >= 0 ? "text-emerald-500" : "text-orange-500"} size={20} />
+      ) : (
+        <TrendingDown className="text-orange-500" size={20} />
+      )}
+    </div>
+  </div>
+</div>
           </div>
         )}
         
