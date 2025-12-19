@@ -1452,10 +1452,10 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                 <div className={`rounded-2xl shadow-sm border overflow-hidden transition-colors duration-300 ${
                   theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
                 }`}>
-                  <div className={`px-6 py-4 border-b flex justify-between items-center ${
+                  <div className={`px-4 sm:px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
                     theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                   }`}>
-                    <h2 className="text-xl font-bold">Transaction History</h2>
+                    <h2 className="text-xl font-bold mb-2 sm:mb-0">Transaction History</h2>
                     <div className="flex items-center space-x-2">
                       <button 
                         onClick={() => setViewMode('list')}
@@ -1498,11 +1498,11 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                         </div>
                       ) : (
                         filteredExpenses.map(expense => (
-                          <div key={expense.id} className={`px-6 py-4 transition-colors ${
+                         <div key={expense.id} className={`px-4 sm:px-6 py-4 transition-colors ${
                             theme === 'dark' ? 'hover:bg-gray-750' : 'hover:bg-gray-50'
                           }`}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex items-start sm:items-center space-x-3 sm:space-x-4">
                                 <div className={`p-2 rounded-lg ${
                                   expense.type === 'income'
                                     ? theme === 'dark' ? 'bg-green-900/50' : 'bg-green-50'
@@ -1537,7 +1537,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                                 </div>
                               </div>
                               
-                              <div className="flex items-center space-x-4">
+                              <div className="flex items-center justify-between sm:justify-end gap-4">
                                 <span className={`text-lg font-bold ${
                                   expense.type === 'income'
                                     ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
@@ -1567,7 +1567,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                             </div>
                             
                             {expense.description && (
-                              <p className={`mt-3 text-sm ml-12 ${
+                              <p className={`text-sm mt-2 ${
                                 theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                               }`}>
                                 {expense.description}
