@@ -2,7 +2,7 @@
 
 > A modern, feature-rich expense tracking application built with React & Tailwind CSS
 
-![ExpenseTracker Pro Banner](https://via.placeholder.com/1200x400/4F46E5/FFFFFF?text=ExpenseTracker+Pro+-+Smart+Finance+Management)
+![ExpenseTracker Pro Banner](https://imgs.search.brave.com/qXjJTt5fVlBEfyhZRKcLFFfQmkMAEVxiMeaLGO3Gpb0/rs:fit:500:0:1:0/g:ce/aHR0cHM6Ly9pbWcu/ZXRpbWcuY29tL3Ro/dW1iL3dpZHRoLTEy/MDAsaGVpZ2h0LTkw/MCxpbWdzaXplLTMw/OTIxNixyZXNpemVt/b2RlLTc1LG1zaWQt/ODI4OTc4MTQvbWYv/bWYtbmV3cy9zb21l/LWluZGV4LWZ1bmRz/LXRvLWNvc3QtbW9y/ZS5qcGc)
 
 [![GitHub](https://img.shields.io/badge/GitHub-geeksjayjay388-blue?logo=github)](https://github.com/geeksjayjay388)
 [![Email](https://img.shields.io/badge/Email-jacobsihul911%40gmail.com-red?logo=gmail)](mailto:jacobsihul911@gmail.com)
@@ -14,7 +14,7 @@
 
 ## 🚀 Live Demo
 
-**[View Live Application →](#)** *(Deploy to Netlify, Vercel, or GitHub Pages)*
+**[View Live Application →](https://expense-tracker-pro-chi.vercel.app/)** *(Deploy to Netlify, Vercel, or GitHub Pages)*
 
 ---
 
