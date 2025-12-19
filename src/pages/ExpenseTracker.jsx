@@ -33,8 +33,10 @@ import {
   Moon,
   Sun,
   Upload,
-  Bell,
-  User
+  Target,
+  PiggyBank,
+  Globe,
+  Coins
 } from 'lucide-react';
 
 const ExpenseTracker = () => {
@@ -53,6 +55,27 @@ const ExpenseTracker = () => {
     const savedTheme = localStorage.getItem('expense-tracker-theme');
     return savedTheme || 'light';
   });
+  
+  // Currency state
+  const [currency, setCurrency] = useState(() => {
+    const savedCurrency = localStorage.getItem('expense-tracker-currency');
+    return savedCurrency || 'KES';
+  });
+  
+  // Savings state
+  const [savings, setSavings] = useState(() => {
+    const savedSavings = localStorage.getItem('expense-tracker-savings');
+    return savedSavings ? JSON.parse(savedSavings) : { 
+      goal: 0, 
+      current: 0,
+      monthlyTarget: 0,
+      history: []
+    };
+  });
+  
+  // Savings input state
+  const [savingsGoalInput, setSavingsGoalInput] = useState('');
+  const [monthlyTargetInput, setMonthlyTargetInput] = useState('');
   
   // Onboarding tutorial state
   const [showTutorial, setShowTutorial] = useState(() => {
@@ -90,8 +113,40 @@ const ExpenseTracker = () => {
     message: 'Please find my expense report attached.'
   });
   
+  // Currency configuration
+  const currencies = {
+    USD: { symbol: '$', name: 'US Dollar', locale: 'en-US' },
+    EUR: { symbol: '€', name: 'Euro', locale: 'de-DE' },
+    GBP: { symbol: '£', name: 'British Pound', locale: 'en-GB' },
+    JPY: { symbol: '¥', name: 'Japanese Yen', locale: 'ja-JP' },
+    KES: { symbol: 'KSh', name: 'Kenyan Shilling', locale: 'en-KE' },
+    CAD: { symbol: 'CA$', name: 'Canadian Dollar', locale: 'en-CA' },
+    AUD: { symbol: 'A$', name: 'Australian Dollar', locale: 'en-AU' }
+  };
+  
   // Refs
   const fileInputRef = useRef(null);
+  
+  // Currency formatting function
+  const formatCurrency = (amount, showSymbol = true) => {
+    const currencyInfo = currencies[currency];
+    const formatter = new Intl.NumberFormat(currencyInfo.locale, {
+      style: showSymbol ? 'currency' : 'decimal',
+      currency: currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    
+    return formatter.format(amount);
+  };
+  
+  // Format number with commas only
+  const formatNumber = (amount) => {
+    return new Intl.NumberFormat(currencies[currency].locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  };
   
   // Calculate totals
   const totalIncome = expenses
@@ -103,6 +158,7 @@ const ExpenseTracker = () => {
     .reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
   
   const balance = totalIncome - totalExpenses;
+  const netWorth = balance + savings.current;
   
   // Category totals
   const categoryTotals = expenses.reduce((acc, expense) => {
@@ -158,6 +214,7 @@ const ExpenseTracker = () => {
     { id: 'Education', name: 'Education', icon: <FileText size={16} />, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20' },
     { id: 'Salary', name: 'Salary', icon: <Wallet size={16} />, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
     { id: 'Freelance', name: 'Freelance', icon: <Smartphone size={16} />, color: 'text-cyan-500', bg: 'bg-cyan-50 dark:bg-cyan-900/20' },
+    { id: 'Savings', name: 'Savings', icon: <PiggyBank size={16} />, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20' },
     { id: 'Other', name: 'Other', icon: <CreditCard size={16} />, color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-800' },
   ];
   
@@ -165,7 +222,7 @@ const ExpenseTracker = () => {
   const tutorialSteps = [
     {
       title: "Welcome to ExpenseTracker Pro!",
-      description: "Let's get started with 3 simple steps to master your finances.",
+      description: "Track expenses, manage savings, and achieve your financial goals in 3 simple steps.",
       icon: <Wallet className="text-blue-500" size={32} />,
       buttonText: "Next: Add Transactions",
       stepNumber: 1,
@@ -173,16 +230,16 @@ const ExpenseTracker = () => {
     },
     {
       title: "Add & Manage Transactions",
-      description: "Track your income and expenses. Add transactions, categorize them, and keep everything organized.",
+      description: "Track income and expenses. Categorize transactions and watch your finances grow.",
       icon: <Plus className="text-green-500" size={32} />,
-      buttonText: "Next: View Insights",
+      buttonText: "Next: Savings & Currency",
       stepNumber: 2,
       totalSteps: 3
     },
     {
-      title: "Export & Share Reports",
-      description: "Export your data or send reports via email. Your data is automatically saved locally.",
-      icon: <Download className="text-purple-500" size={32} />,
+      title: "Savings & Multi-Currency",
+      description: "Set savings goals, track progress, and switch between currencies with proper formatting.",
+      icon: <PiggyBank className="text-purple-500" size={32} />,
       buttonText: "Get Started!",
       stepNumber: 3,
       totalSteps: 3
@@ -203,6 +260,16 @@ const ExpenseTracker = () => {
   useEffect(() => {
     localStorage.setItem('expense-tracker-data', JSON.stringify(expenses));
   }, [expenses]);
+  
+  // Save currency preference
+  useEffect(() => {
+    localStorage.setItem('expense-tracker-currency', currency);
+  }, [currency]);
+  
+  // Save savings data
+  useEffect(() => {
+    localStorage.setItem('expense-tracker-savings', JSON.stringify(savings));
+  }, [savings]);
   
   // Show tutorial on first visit
   useEffect(() => {
@@ -260,6 +327,21 @@ const ExpenseTracker = () => {
       };
       setExpenses(prev => [newExpense, ...prev]);
       showNotification('Transaction added successfully');
+      
+      // If this is a savings transfer, update savings
+      if (formData.category === 'Savings' && formData.type === 'expense') {
+        const amount = parseFloat(formData.amount);
+        setSavings(prev => ({
+          ...prev,
+          current: prev.current + amount,
+          history: [...prev.history, {
+            date: new Date().toISOString(),
+            amount,
+            type: 'deposit',
+            description: formData.description || 'Transfer to savings'
+          }]
+        }));
+      }
     }
     
     setFormData({
@@ -308,7 +390,7 @@ const ExpenseTracker = () => {
       exp.type,
       exp.category,
       exp.title,
-      `$${parseFloat(exp.amount).toFixed(2)}`,
+      formatCurrency(parseFloat(exp.amount), false),
       exp.description || ''
     ]);
     
@@ -317,7 +399,7 @@ const ExpenseTracker = () => {
       ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
     ].join('\n');
     
-    downloadFile(csvContent, 'expenses.csv', 'text/csv');
+    downloadFile(csvContent, `expenses_${currency}.csv`, 'text/csv');
     showNotification('CSV file downloaded');
     setShowExportModal(false);
   };
@@ -325,13 +407,20 @@ const ExpenseTracker = () => {
   const exportToJSON = () => {
     const data = {
       exportedAt: new Date().toISOString(),
-      totalIncome,
-      totalExpenses,
-      balance,
+      currency: currency,
+      totalIncome: formatCurrency(totalIncome),
+      totalExpenses: formatCurrency(totalExpenses),
+      balance: formatCurrency(balance),
+      savings: {
+        current: formatCurrency(savings.current),
+        goal: formatCurrency(savings.goal),
+        progress: savings.goal > 0 ? `${Math.round((savings.current / savings.goal) * 100)}%` : 'Not set'
+      },
+      netWorth: formatCurrency(netWorth),
       transactions: expenses
     };
     
-    downloadFile(JSON.stringify(data, null, 2), 'expenses.json', 'application/json');
+    downloadFile(JSON.stringify(data, null, 2), `expenses_${currency}.json`, 'application/json');
     showNotification('JSON file downloaded');
     setShowExportModal(false);
   };
@@ -357,7 +446,6 @@ const ExpenseTracker = () => {
       return;
     }
     
-    // Simulate email sending
     const report = generateEmailReport();
     console.log('Email sent to:', emailForm.recipient);
     console.log('Report:', report);
@@ -373,21 +461,30 @@ const ExpenseTracker = () => {
   
   const generateEmailReport = () => {
     return `
-Expense Report - Generated on ${new Date().toLocaleDateString()}
+ExpenseTracker Pro Report
+Generated: ${new Date().toLocaleDateString()}
+Currency: ${currency} (${currencies[currency].symbol})
 
-SUMMARY:
-• Total Income: $${totalIncome.toFixed(2)}
-• Total Expenses: $${totalExpenses.toFixed(2)}
-• Net Balance: $${balance.toFixed(2)}
+FINANCIAL SUMMARY:
+• Total Income: ${formatCurrency(totalIncome)}
+• Total Expenses: ${formatCurrency(totalExpenses)}
+• Net Balance: ${formatCurrency(balance)}
+
+SAVINGS ACCOUNT:
+• Current Savings: ${formatCurrency(savings.current)}
+• Savings Goal: ${formatCurrency(savings.goal)}
+• Goal Progress: ${savings.goal > 0 ? Math.round((savings.current / savings.goal) * 100) + '%' : 'Not set'}
+• Monthly Target: ${formatCurrency(savings.monthlyTarget)}
+• Net Worth: ${formatCurrency(netWorth)}
 
 RECENT TRANSACTIONS:
 ${expenses.slice(0, 10).map(exp => 
-  `• ${exp.date} - ${exp.title}: $${parseFloat(exp.amount).toFixed(2)} (${exp.type})`
+  `• ${exp.date} - ${exp.title}: ${formatCurrency(parseFloat(exp.amount))} (${exp.type}, ${exp.category})`
 ).join('\n')}
 
 CATEGORY BREAKDOWN:
 ${Object.entries(categoryTotals).map(([cat, amount]) => 
-  `• ${cat}: $${amount.toFixed(2)}`
+  `• ${cat}: ${formatCurrency(amount)}`
 ).join('\n')}
     `;
   };
@@ -412,10 +509,15 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
             headers.forEach((header, index) => {
               obj[header.toLowerCase()] = values[index];
             });
+            
+            // Parse amount - remove currency symbols and commas
+            let amount = obj.amount || '0';
+            amount = amount.replace(/[^\d.-]/g, '');
+            
             return {
               id: Date.now().toString() + Math.random(),
               title: obj.title || 'Imported',
-              amount: obj.amount ? parseFloat(obj.amount.replace('$', '')).toFixed(2) : '0.00',
+              amount: amount ? parseFloat(amount).toFixed(2) : '0.00',
               category: obj.category || 'Other',
               date: obj.date || new Date().toISOString().split('T')[0],
               type: (obj.type || 'expense').toLowerCase(),
@@ -437,6 +539,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
   const handleClearData = () => {
     if (window.confirm('Are you sure you want to clear all data? This cannot be undone.')) {
       setExpenses([]);
+      setSavings({ goal: 0, current: 0, monthlyTarget: 0, history: [] });
       showNotification('All data cleared');
     }
   };
@@ -447,16 +550,12 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
       { id: '1', title: 'Monthly Salary', amount: '3500.00', category: 'Salary', date: new Date().toISOString().split('T')[0], type: 'income', description: 'Monthly paycheck' },
       { id: '2', title: 'Grocery Shopping', amount: '245.75', category: 'Food', date: new Date().toISOString().split('T')[0], type: 'expense', description: 'Weekly groceries' },
       { id: '3', title: 'Electric Bill', amount: '89.50', category: 'Utilities', date: new Date().toISOString().split('T')[0], type: 'expense', description: 'Monthly electricity' },
+      { id: '4', title: 'Savings Deposit', amount: '500.00', category: 'Savings', date: new Date().toISOString().split('T')[0], type: 'expense', description: 'Monthly savings deposit' },
     ];
     
     setExpenses(sampleData);
+    setSavings(prev => ({ ...prev, current: 500, goal: 5000, monthlyTarget: 500 }));
     showNotification('Sample data added');
-  };
-  
-  // Get category icon
-  const getCategoryIcon = (category) => {
-    const cat = categories.find(c => c.id === category);
-    return cat ? cat.icon : <CreditCard size={16} />;
   };
   
   // Get current tutorial step
@@ -475,7 +574,6 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
           <div className={`rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden ${
             theme === 'dark' ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
           }`}>
-            {/* Tutorial Header */}
             <div className={`p-6 ${theme === 'dark' ? 'bg-gray-700' : 'bg-gradient-to-r from-blue-600 to-indigo-600'}`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
@@ -510,145 +608,33 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
               </div>
             </div>
             
-            {/* Tutorial Content */}
             <div className="p-6">
-              <div className="mb-6">
-                <div className="flex items-center justify-center mb-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-blue-100'
-                  }`}>
-                    <span className={`text-xl font-bold ${
-                      theme === 'dark' ? 'text-white' : 'text-blue-600'
-                    }`}>
-                      {currentTutorialStep.stepNumber}
-                    </span>
+              <p className={`text-lg text-center mb-6 ${
+                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                {currentTutorialStep.description}
+              </p>
+              
+              {/* Step 3 shows currency info */}
+              {currentStep === 2 && (
+                <div className={`rounded-xl p-4 mb-6 ${
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-blue-50'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-medium">Supported Currencies:</span>
+                    <span className="text-sm text-gray-500">7 currencies</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(currencies).slice(0, 6).map(([code, info]) => (
+                      <div key={code} className="flex items-center space-x-2 p-2 bg-white dark:bg-gray-600 rounded-lg">
+                        <span className="font-medium">{info.symbol}</span>
+                        <span className="text-sm">{code}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                
-                <p className={`text-lg text-center mb-6 ${
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  {currentTutorialStep.description}
-                </p>
-                
-                {/* Step content */}
-                {currentStep === 0 && (
-                  <div className={`rounded-xl p-4 mb-6 ${
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-blue-50'
-                  }`}>
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          theme === 'dark' ? 'bg-gray-600' : 'bg-blue-100'
-                        }`}>
-                          <span className="text-blue-500 font-bold">1</span>
-                        </div>
-                        <span className="font-medium">Track Income & Expenses</span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          theme === 'dark' ? 'bg-gray-600' : 'bg-green-100'
-                        }`}>
-                          <span className="text-green-500 font-bold">2</span>
-                        </div>
-                        <span className="font-medium">Categorize Transactions</span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          theme === 'dark' ? 'bg-gray-600' : 'bg-purple-100'
-                        }`}>
-                          <span className="text-purple-500 font-bold">3</span>
-                        </div>
-                        <span className="font-medium">Export & Share Reports</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {currentStep === 1 && (
-                  <div className={`rounded-xl p-4 mb-6 ${
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-green-50'
-                  }`}>
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-3">
-                        <div className={`p-2 rounded-lg ${
-                          theme === 'dark' ? 'bg-gray-600' : 'bg-green-100'
-                        }`}>
-                          <Plus className="text-green-500" size={20} />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">Add Transactions</h4>
-                          <p className={`text-sm ${
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                          }`}>
-                            Track all your income and expenses
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-3">
-                        <div className={`p-2 rounded-lg ${
-                          theme === 'dark' ? 'bg-gray-600' : 'bg-blue-100'
-                        }`}>
-                          <Filter className="text-blue-500" size={20} />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">Filter & Sort</h4>
-                          <p className={`text-sm ${
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                          }`}>
-                            Organize by category, date, or type
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {currentStep === 2 && (
-                  <div className={`rounded-xl p-4 mb-6 ${
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-purple-50'
-                  }`}>
-                    <div className="space-y-4">
-                      <div className="flex items-center space-x-3">
-                        <div className={`p-2 rounded-lg ${
-                          theme === 'dark' ? 'bg-gray-600' : 'bg-purple-100'
-                        }`}>
-                          <Download className="text-purple-500" size={20} />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">Export Data</h4>
-                          <p className={`text-sm ${
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                          }`}>
-                            CSV, JSON formats
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-3">
-                        <div className={`p-2 rounded-lg ${
-                          theme === 'dark' ? 'bg-gray-600' : 'bg-blue-100'
-                        }`}>
-                          <Mail className="text-blue-500" size={20} />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">Email Reports</h4>
-                          <p className={`text-sm ${
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                          }`}>
-                            Share with yourself or others
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
               
-              {/* Tutorial Navigation */}
               <div className="flex items-center justify-between pt-4 border-t border-gray-700">
                 <button
                   onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
@@ -713,12 +699,47 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
               <div>
                 <h1 className="text-2xl font-bold">ExpenseTracker Pro</h1>
                 <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Manage your finances efficiently
+                  Manage your finances with multi-currency support
                 </p>
               </div>
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Currency Selector */}
+              <div className="relative group hidden md:block">
+                <button className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
+                  theme === 'dark'
+                    ? 'bg-gray-700 hover:bg-gray-600'
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}>
+                  <Globe size={18} />
+                  <span className="font-medium">{currency}</span>
+                  <ChevronDown size={16} />
+                </button>
+                
+                <div className={`absolute right-0 mt-2 w-48 py-2 rounded-xl shadow-lg z-50 hidden group-hover:block ${
+                  theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+                }`}>
+                  {Object.entries(currencies).map(([code, info]) => (
+                    <button
+                      key={code}
+                      onClick={() => setCurrency(code)}
+                      className={`w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-between ${
+                        currency === code ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : ''
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <span className="font-medium">{info.symbol}</span>
+                        <span>{info.name}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded ${currency === code ? 'bg-blue-100 dark:bg-blue-800' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                        {code}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
@@ -727,7 +748,6 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                     ? 'bg-gray-700 hover:bg-gray-600 text-yellow-300' 
                     : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                 }`}
-                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
               >
                 {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
               </button>
@@ -790,6 +810,26 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
           theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
         } px-4 py-3`}>
           <div className="flex flex-col space-y-3">
+            {/* Currency Selector - Mobile */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Currency:</span>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className={`text-sm px-2 py-1 rounded ${
+                  theme === 'dark' 
+                    ? 'bg-gray-700 border-gray-600 text-white' 
+                    : 'bg-gray-100 border-gray-300'
+                } border`}
+              >
+                {Object.entries(currencies).map(([code, info]) => (
+                  <option key={code} value={code}>
+                    {info.symbol} - {code}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
             <button 
               onClick={() => { setShowExportModal(true); setMobileMenuOpen(false); }}
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
@@ -867,7 +907,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
               </div>
               <h2 className="text-2xl font-bold mb-3">Welcome to ExpenseTracker Pro!</h2>
               <p className={`mb-6 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                Start tracking your expenses and income. Your data will be saved automatically.
+                Track expenses, manage savings, and switch between currencies.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
@@ -897,7 +937,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
         
         {/* Stats Overview */}
         {expenses.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             {/* Income Card */}
             <div className={`rounded-2xl p-6 shadow-sm transition-colors duration-300 ${
               theme === 'dark'
@@ -911,21 +951,16 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                   }`}>
                     Total Income
                   </p>
-                  <p className={`text-3xl font-bold ${
+                  <p className={`text-2xl font-bold ${
                     theme === 'dark' ? 'text-green-100' : 'text-green-900'
                   }`}>
-                    ${totalIncome.toFixed(2)}
-                  </p>
-                  <p className={`text-sm mt-2 ${
-                    theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                  }`}>
-                    +12% from last month
+                    {formatCurrency(totalIncome)}
                   </p>
                 </div>
                 <div className={`p-3 rounded-xl ${
                   theme === 'dark' ? 'bg-green-900/50' : 'bg-green-100'
                 }`}>
-                  <TrendingUp className="text-green-500" size={24} />
+                  <TrendingUp className="text-green-500" size={20} />
                 </div>
               </div>
             </div>
@@ -943,69 +978,80 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                   }`}>
                     Total Expenses
                   </p>
-                  <p className={`text-3xl font-bold ${
+                  <p className={`text-2xl font-bold ${
                     theme === 'dark' ? 'text-red-100' : 'text-red-900'
                   }`}>
-                    ${totalExpenses.toFixed(2)}
-                  </p>
-                  <p className={`text-sm mt-2 ${
-                    theme === 'dark' ? 'text-red-400' : 'text-red-600'
-                  }`}>
-                    -5% from last month
+                    {formatCurrency(totalExpenses)}
                   </p>
                 </div>
                 <div className={`p-3 rounded-xl ${
                   theme === 'dark' ? 'bg-red-900/50' : 'bg-red-100'
                 }`}>
-                  <TrendingDown className="text-red-500" size={24} />
+                  <TrendingDown className="text-red-500" size={20} />
                 </div>
               </div>
             </div>
             
-            {/* Balance Card */}
+            {/* Savings Card */}
             <div className={`rounded-2xl p-6 shadow-sm transition-colors duration-300 ${
               theme === 'dark'
-                ? balance >= 0 
-                  ? 'bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-800'
-                  : 'bg-gradient-to-r from-amber-900/30 to-orange-900/30 border border-amber-800'
-                : balance >= 0
-                ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100'
-                : 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100'
+                ? 'bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-800'
+                : 'bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-100'
             }`}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className={`text-sm font-medium mb-1 ${
-                    theme === 'dark'
-                      ? balance >= 0 ? 'text-blue-300' : 'text-amber-300'
-                      : balance >= 0 ? 'text-blue-800' : 'text-amber-800'
+                    theme === 'dark' ? 'text-purple-300' : 'text-purple-800'
                   }`}>
-                    Net Balance
+                    Savings
                   </p>
-                  <p className={`text-3xl font-bold ${
-                    balance >= 0
-                      ? theme === 'dark' ? 'text-blue-100' : 'text-blue-900'
-                      : theme === 'dark' ? 'text-amber-100' : 'text-amber-900'
+                  <p className={`text-2xl font-bold ${
+                    theme === 'dark' ? 'text-purple-100' : 'text-purple-900'
                   }`}>
-                    ${balance.toFixed(2)}
+                    {formatCurrency(savings.current)}
                   </p>
-                  <p className={`text-sm mt-2 ${
-                    theme === 'dark'
-                      ? balance >= 0 ? 'text-blue-400' : 'text-amber-400'
-                      : balance >= 0 ? 'text-blue-600' : 'text-amber-600'
+                  <p className={`text-xs mt-1 ${
+                    theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
                   }`}>
-                    {balance >= 0 ? 'Positive balance' : 'Negative balance'}
+                    {savings.goal > 0 ? `${Math.round((savings.current / savings.goal) * 100)}% of goal` : 'Set a goal'}
                   </p>
                 </div>
                 <div className={`p-3 rounded-xl ${
-                  balance >= 0
-                    ? theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
-                    : theme === 'dark' ? 'bg-amber-900/50' : 'bg-amber-100'
+                  theme === 'dark' ? 'bg-purple-900/50' : 'bg-purple-100'
                 }`}>
-                  <Wallet className={
-                    balance >= 0
-                      ? theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                      : theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
-                  } size={24} />
+                  <PiggyBank className="text-purple-500" size={20} />
+                </div>
+              </div>
+            </div>
+            
+            {/* Net Worth Card */}
+            <div className={`rounded-2xl p-6 shadow-sm transition-colors duration-300 ${
+              theme === 'dark'
+                ? 'bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-800'
+                : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-medium mb-1 ${
+                    theme === 'dark' ? 'text-blue-300' : 'text-blue-800'
+                  }`}>
+                    Net Worth
+                  </p>
+                  <p className={`text-2xl font-bold ${
+                    theme === 'dark' ? 'text-blue-100' : 'text-blue-900'
+                  }`}>
+                    {formatCurrency(netWorth)}
+                  </p>
+                  <p className={`text-xs mt-1 ${
+                    theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                  }`}>
+                    Balance + Savings
+                  </p>
+                </div>
+                <div className={`p-3 rounded-xl ${
+                  theme === 'dark' ? 'bg-blue-900/50' : 'bg-blue-100'
+                }`}>
+                  <Wallet className="text-blue-500" size={20} />
                 </div>
               </div>
             </div>
@@ -1065,7 +1111,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                     <label className={`block text-sm font-medium mb-2 ${
                       theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                     }`}>
-                      Amount ($) *
+                      Amount ({currencies[currency].symbol}) *
                     </label>
                     <input
                       type="number"
@@ -1395,7 +1441,10 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                                     ? theme === 'dark' ? 'bg-green-900/50' : 'bg-green-50'
                                     : theme === 'dark' ? 'bg-red-900/50' : 'bg-red-50'
                                 }`}>
-                                  {getCategoryIcon(expense.category)}
+                                  {(() => {
+                                    const cat = categories.find(c => c.id === expense.category);
+                                    return cat ? cat.icon : <CreditCard size={16} />;
+                                  })()}
                                 </div>
                                 <div>
                                   <h4 className="font-medium">{expense.title}</h4>
@@ -1427,7 +1476,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                                     ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
                                     : theme === 'dark' ? 'text-red-400' : 'text-red-600'
                                 }`}>
-                                  {expense.type === 'income' ? '+' : '-'}${parseFloat(expense.amount).toFixed(2)}
+                                  {expense.type === 'income' ? '+' : '-'}{formatCurrency(parseFloat(expense.amount))}
                                 </span>
                                 <div className="flex space-x-2">
                                   <button
@@ -1482,7 +1531,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                                     {category}
                                   </span>
                                   <span className={theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}>
-                                    ${amount.toFixed(2)} ({percentage}%)
+                                    {formatCurrency(amount)} ({percentage}%)
                                   </span>
                                 </div>
                                 <div className={`w-full rounded-full h-2 ${
@@ -1524,8 +1573,260 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
             </div>
           </div>
           
-          {/* Right Column - Categories & Quick Actions */}
+          {/* Right Column - Savings, Categories & Quick Actions */}
           <div className="space-y-8">
+            {/* Savings Account */}
+            <div className={`rounded-2xl shadow-sm border p-6 transition-colors duration-300 ${
+              theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold">Savings Account</h2>
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                  <PiggyBank className="text-purple-600 dark:text-purple-400" size={20} />
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Current Savings */}
+                <div className={`p-4 rounded-xl ${
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-purple-50'
+                }`}>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                      Current Savings
+                    </span>
+                    <span className="text-xl font-bold text-purple-700 dark:text-purple-300">
+                      {formatCurrency(savings.current)}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500"
+                      style={{ 
+                        width: `${savings.goal > 0 ? Math.min(100, (savings.current / savings.goal) * 100) : 0}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    {savings.goal > 0 
+                      ? `${Math.round((savings.current / savings.goal) * 100)}% of ${formatCurrency(savings.goal)} goal`
+                      : 'No savings goal set'}
+                  </div>
+                </div>
+                
+                {/* Savings Goal & Monthly Target */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={`p-3 rounded-xl ${
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-green-50'
+                  }`}>
+                    <div className="text-xs font-medium text-green-700 dark:text-green-300 mb-1">
+                      Goal
+                    </div>
+                    <div className="text-lg font-bold text-green-700 dark:text-green-300">
+                      {formatCurrency(savings.goal)}
+                    </div>
+                  </div>
+                  
+                  <div className={`p-3 rounded-xl ${
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-blue-50'
+                  }`}>
+                    <div className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">
+                      Monthly Target
+                    </div>
+                    <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
+                      {formatCurrency(savings.monthlyTarget)}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Progress Status */}
+                <div className={`p-3 rounded-lg ${
+                  savings.current >= savings.goal && savings.goal > 0
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">
+                      {savings.current >= savings.goal && savings.goal > 0 
+                        ? '🎉 Goal Achieved!' 
+                        : savings.goal > 0
+                        ? `${formatCurrency(savings.goal - savings.current)} needed`
+                        : 'Set a savings goal to start tracking'}
+                    </span>
+                    {savings.goal > 0 && (
+                      <span className="text-sm">
+                        {Math.round((savings.current / savings.goal) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Savings Management */}
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Set Goal:</span>
+                      <div className="flex space-x-2">
+                        <input
+                          type="number"
+                          value={savingsGoalInput}
+                          onChange={(e) => setSavingsGoalInput(e.target.value)}
+                          placeholder="Amount"
+                          className={`w-32 px-3 py-1 rounded-lg text-sm ${
+                            theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'border border-gray-300'
+                          }`}
+                        />
+                        <button
+                          onClick={() => {
+                            const amount = parseFloat(savingsGoalInput);
+                            if (amount > 0) {
+                              setSavings({ ...savings, goal: amount });
+                              setSavingsGoalInput('');
+                              showNotification(`Savings goal set to ${formatCurrency(amount)}`);
+                            }
+                          }}
+                          className="px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm rounded-lg hover:opacity-90 transition-opacity"
+                        >
+                          Set
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Monthly Target:</span>
+                      <div className="flex space-x-2">
+                        <input
+                          type="number"
+                          value={monthlyTargetInput}
+                          onChange={(e) => setMonthlyTargetInput(e.target.value)}
+                          placeholder="Amount"
+                          className={`w-32 px-3 py-1 rounded-lg text-sm ${
+                            theme === 'dark'
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'border border-gray-300'
+                          }`}
+                        />
+                        <button
+                          onClick={() => {
+                            const amount = parseFloat(monthlyTargetInput);
+                            if (amount > 0) {
+                              setSavings({ ...savings, monthlyTarget: amount });
+                              setMonthlyTargetInput('');
+                              showNotification(`Monthly target set to ${formatCurrency(amount)}`);
+                            }
+                          }}
+                          className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm rounded-lg hover:opacity-90 transition-opacity"
+                        >
+                          Set
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Quick Actions */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        const amount = parseFloat(prompt(`Add to savings (Available: ${formatCurrency(balance)})`) || '0');
+                        if (amount > 0 && amount <= balance) {
+                          setSavings({ 
+                            ...savings, 
+                            current: savings.current + amount 
+                          });
+                          
+                          // Create a savings transaction
+                          const transferExpense = {
+                            id: Date.now().toString(),
+                            title: 'Transfer to Savings',
+                            amount: amount.toFixed(2),
+                            category: 'Savings',
+                            date: new Date().toISOString().split('T')[0],
+                            type: 'expense',
+                            description: 'Transfer to savings account'
+                          };
+                          setExpenses(prev => [transferExpense, ...prev]);
+                          
+                          showNotification(`Added ${formatCurrency(amount)} to savings`);
+                        } else if (amount > balance) {
+                          showNotification('Insufficient balance', 'error');
+                        }
+                      }}
+                      className="px-3 py-2 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors text-sm"
+                    >
+                      Add Funds
+                    </button>
+                    <button
+                      onClick={() => {
+                        const amount = parseFloat(prompt(`Withdraw from savings (Available: ${formatCurrency(savings.current)})`) || '0');
+                        if (amount > 0 && amount <= savings.current) {
+                          setSavings({ 
+                            ...savings, 
+                            current: savings.current - amount 
+                          });
+                          
+                          // Create an income transaction for withdrawal
+                          const withdrawalIncome = {
+                            id: Date.now().toString(),
+                            title: 'Withdrawal from Savings',
+                            amount: amount.toFixed(2),
+                            category: 'Savings',
+                            date: new Date().toISOString().split('T')[0],
+                            type: 'income',
+                            description: 'Withdrawal from savings account'
+                          };
+                          setExpenses(prev => [withdrawalIncome, ...prev]);
+                          
+                          showNotification(`Withdrew ${formatCurrency(amount)} from savings`);
+                        } else if (amount > savings.current) {
+                          showNotification('Insufficient savings', 'error');
+                        }
+                      }}
+                      className="px-3 py-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors text-sm"
+                    >
+                      Withdraw
+                    </button>
+                  </div>
+                  
+                  {/* Quick Transfer */}
+                  <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <span className="text-gray-600 dark:text-gray-400">Transfer from balance:</span>
+                    <button
+                      onClick={() => {
+                        const amount = parseFloat(prompt(`Transfer amount (Available: ${formatCurrency(balance)})`) || '0');
+                        if (amount > 0 && amount <= balance) {
+                          setSavings({ 
+                            ...savings, 
+                            current: savings.current + amount 
+                          });
+                          
+                          // Create transaction
+                          const transferExpense = {
+                            id: Date.now().toString(),
+                            title: 'Balance Transfer to Savings',
+                            amount: amount.toFixed(2),
+                            category: 'Savings',
+                            date: new Date().toISOString().split('T')[0],
+                            type: 'expense',
+                            description: 'Transfer from main balance'
+                          };
+                          setExpenses(prev => [transferExpense, ...prev]);
+                          
+                          showNotification(`Transferred ${formatCurrency(amount)} to savings`);
+                        } else if (amount > balance) {
+                          showNotification('Insufficient balance', 'error');
+                        }
+                      }}
+                      className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      Transfer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             {/* Quick Actions */}
             <div className={`rounded-2xl p-6 transition-colors duration-300 ${
               theme === 'dark'
@@ -1554,7 +1855,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                       <p className={`text-sm ${
                         theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                       }`}>
-                        CSV, JSON formats
+                        CSV, JSON ({currency})
                       </p>
                     </div>
                   </div>
@@ -1580,7 +1881,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                       <p className={`text-sm ${
                         theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                       }`}>
-                        Send to yourself or others
+                        Send with savings info
                       </p>
                     </div>
                   </div>
@@ -1606,7 +1907,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                       <p className={`text-sm ${
                         theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                       }`}>
-                        Learn how to use the app
+                        Learn features
                       </p>
                     </div>
                   </div>
@@ -1645,7 +1946,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                             <span className="font-medium">{category}</span>
                           </div>
                           <span className="font-bold">
-                            ${amount.toFixed(2)}
+                            {formatCurrency(amount)}
                           </span>
                         </div>
                       );
@@ -1663,6 +1964,16 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                 <h2 className="text-xl font-bold mb-6">Statistics</h2>
                 
                 <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Currency</span>
+                    <span className="font-bold flex items-center space-x-2">
+                      <span>{currencies[currency].symbol}</span>
+                      <span className="text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                        {currency}
+                      </span>
+                    </span>
+                  </div>
+                  
                   <div className="flex justify-between items-center">
                     <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Total Transactions</span>
                     <span className="font-bold">{expenses.length}</span>
@@ -1682,13 +1993,20 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                     </span>
                   </div>
                   
+                  <div className="flex justify-between items-center">
+                    <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Savings Deposits</span>
+                    <span className="font-bold text-purple-500">
+                      {expenses.filter(e => e.category === 'Savings' && e.type === 'expense').length}
+                    </span>
+                  </div>
+                  
                   <div className={`pt-4 border-t ${
                     theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
                   }`}>
                     <div className={`text-sm ${
                       theme === 'dark' ? 'text-gray-500' : 'text-gray-600'
                     }`}>
-                      Data is automatically saved to your browser's local storage
+                      All amounts in {currency} with proper formatting
                     </div>
                   </div>
                 </div>
@@ -1782,7 +2100,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                       <p className={`text-sm ${
                         theme === 'dark' ? 'text-blue-300' : 'text-blue-800'
                       }`}>
-                        The report will include your transaction history, category breakdown, and financial summary.
+                        Report includes transactions, savings progress, and financial summary in {currency}.
                       </p>
                     </div>
                     
@@ -1844,7 +2162,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                   <h4 className={`font-medium mb-3 ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-900'
                   }`}>
-                    Export Format
+                    Export Format ({currency})
                   </h4>
                   <div className="grid grid-cols-2 gap-3">
                     <button
@@ -1880,6 +2198,26 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                         Structured data
                       </span>
                     </button>
+                  </div>
+                </div>
+                
+                <div className={`p-4 rounded-xl ${
+                  theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                }`}>
+                  <div className="text-sm">
+                    <p className={`font-medium mb-1 ${
+                      theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Export Includes:
+                    </p>
+                    <ul className={`space-y-1 ${
+                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      <li>• All transactions with proper {currency} formatting</li>
+                      <li>• Savings account data (current, goal, progress)</li>
+                      <li>• Financial summaries and statistics</li>
+                      <li>• Export date and currency information</li>
+                    </ul>
                   </div>
                 </div>
                 
@@ -1937,7 +2275,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
               <p className={`text-sm mt-1 ${
                 theme === 'dark' ? 'text-gray-500' : 'text-gray-600'
               }`}>
-                Professional financial management tool
+                Multi-currency expense tracking with savings
               </p>
             </div>
             
@@ -1953,7 +2291,7 @@ ${Object.entries(categoryTotals).map(([cat, amount]) =>
                 Show Tutorial
               </button>
               <span>•</span>
-              <span>Data stored locally • {new Date().getFullYear()}</span>
+              <span>Currency: {currency} • {new Date().getFullYear()}</span>
             </div>
           </div>
         </div>
